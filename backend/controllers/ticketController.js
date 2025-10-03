@@ -1,0 +1,459 @@
+const Ticket = require('../models/Tickets');
+const TicketLog = require('../models/TicketLog');
+const User = require('../models/User');
+
+// Create a new ticket
+const createTicket = async (req, res) => {
+  try {
+    const { ticketType, complaint, roomNo, raisedFor } = req.body;
+    const userId = req.user._id;
+
+    // Validation
+    if (!ticketType || !complaint || !roomNo) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide ticket type, complaint description, and room number'
+      });
+    }
+
+    // Validate ticket type
+    if (!['incidental', 'replacement'].includes(ticketType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid ticket type'
+      });
+    }
+
+    // Generate title from complaint (first 50 characters)
+    const title = complaint.length > 50
+      ? complaint.substring(0, 47) + '...'
+      : complaint;
+
+    // Handle raisedFor - if it's a string, try to find the user
+    let raisedForUser = null;
+    console.log('=== SCRIPT STARTED ===');
+    if (raisedFor && raisedFor.trim() !== '') {
+      const searchName = raisedFor.trim();
+      console.log('Searching for user:', searchName);
+
+      // Try to find user by username (case insensitive)
+      raisedForUser = await User.findOne({
+        username: { $regex: new RegExp(`^${searchName}$`, 'i') }
+      });
+
+      console.log('Initial search result:', raisedForUser);
+
+      // If not found by username, create a simple mapping for common names
+      if (!raisedForUser) {
+        console.log('User not found, trying name mapping...');
+        const nameMapping = {
+          'hetal mam': 'hetal',
+          'asmita mam': 'asmita',
+          'khushal sir': 'khushal',
+          'shaunak sir': 'shaunak',
+          'savan sir': 'savan',
+          'imran sir': 'imran',
+          'yash sir': 'yash',
+          'devki mam': 'devki',
+          'rachel mam': 'rachel',
+          'daya mam': 'daya',
+          'reetu mam': 'reetu',
+          'smita mam': 'smita'
+        };
+
+        const mappedName = nameMapping[searchName.toLowerCase()];
+        console.log('Mapped name:', mappedName);
+
+        if (mappedName) {
+          raisedForUser = await User.findOne({
+            username: { $regex: new RegExp(`^${mappedName}$`, 'i') }
+          });
+          console.log('Mapped search result:', raisedForUser);
+        }
+      }
+      if (!raisedForUser) {
+        console.log('Trying broader search...');
+        raisedForUser = await User.findOne({
+          $or: [
+            { displayName: { $regex: new RegExp(searchName, 'i') } },
+            { email: { $regex: new RegExp(searchName, 'i') } }
+          ]
+        });
+        console.log('Broad search result:', raisedForUser ? raisedForUser.username : 'NOT FOUND');
+      }
+    }
+    console.log("data", {
+      title,
+      description: complaint,
+      type: ticketType,
+      roomNo: roomNo.toString(),
+      raisedBy: userId,
+      raisedFor: raisedForUser ? raisedForUser._id : null,
+      history: [{
+        status: 'open',
+        note: 'Ticket created',
+        updatedBy: userId
+      }]
+    })
+    // Create the ticket
+    const ticket = new Ticket({
+      title,
+      description: complaint,
+      type: ticketType,
+      roomNo: roomNo.toString(),
+      raisedBy: userId,
+      raisedFor: raisedForUser ? raisedForUser._id : null,
+      history: [{
+        status: 'open',
+        note: 'Ticket created',
+        updatedBy: userId
+      }]
+    });
+
+    await ticket.save();
+
+    // Create ticket log entry
+    await TicketLog.createLog({
+      ticketId: ticket._id,
+      action: 'created',
+      description: `Ticket created with type: ${ticketType}`,
+      newStatus: 'open',
+      updatedBy: userId,
+      metadata: {
+        roomNo: roomNo.toString(),
+        type: ticketType,
+        raisedForName: raisedFor || null
+      }
+    });
+
+    // Populate the ticket for response
+    await ticket.populate([
+      { path: 'raisedBy', select: 'username email role' },
+      { path: 'raisedFor', select: 'username email' }
+    ]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Ticket created successfully',
+      data: {
+        ticket: {
+          id: ticket._id,
+          ticketNumber: ticket.ticketNumber,
+          title: ticket.title,
+          description: ticket.description,
+          type: ticket.type,
+          status: ticket.status,
+          priority: ticket.priority,
+          roomNo: ticket.roomNo,
+          raisedBy: ticket.raisedBy,
+          raisedFor: ticket.raisedFor,
+          createdAt: ticket.createdAt
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Ticket creation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Get all tickets for a user
+const getUserTickets = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const status = req.query.status;
+    const type = req.query.type;
+
+    // Build query
+    const query = {
+      $or: [
+        { raisedBy: userId },
+        { raisedFor: userId }
+      ]
+    };
+
+    if (status) {
+      query.status = status;
+    }
+
+    if (type) {
+      query.type = type;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const tickets = await Ticket.find(query)
+      .populate('raisedBy', 'username email role')
+      .populate('raisedFor', 'username email')
+      .populate('assignedTo', 'username email role')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Ticket.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: {
+        tickets,
+        pagination: {
+          current: page,
+          pages: Math.ceil(total / limit),
+          total,
+          hasNext: page < Math.ceil(total / limit),
+          hasPrev: page > 1
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get user tickets error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Get all tickets (admin/support only)
+const getAllTickets = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const status = req.query.status;
+    const type = req.query.type;
+    const priority = req.query.priority;
+
+    // Build query
+    const query = {};
+
+    if (status) query.status = status;
+    if (type) query.type = type;
+    if (priority) query.priority = priority;
+
+    const skip = (page - 1) * limit;
+
+    const tickets = await Ticket.find(query)
+      .populate('raisedBy', 'username email role')
+      .populate('raisedFor', 'username email')
+      .populate('assignedTo', 'username email role')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Ticket.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: {
+        tickets,
+        pagination: {
+          current: page,
+          pages: Math.ceil(total / limit),
+          total,
+          hasNext: page < Math.ceil(total / limit),
+          hasPrev: page > 1
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get all tickets error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Get single ticket by ID
+const getTicketById = async (req, res) => {
+  try {
+    const ticketId = req.params.id;
+    const userId = req.user._id;
+    const userRole = req.user.role;
+
+    const ticket = await Ticket.findById(ticketId)
+      .populate('raisedBy', 'username email role')
+      .populate('raisedFor', 'username email')
+      .populate('assignedTo', 'username email role')
+      .populate('history.updatedBy', 'username email role');
+
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ticket not found'
+      });
+    }
+
+    // Check permission - user can only view their own tickets unless they're admin/support
+    if (userRole === 'user') {
+      const canView = ticket.raisedBy._id.equals(userId) ||
+        (ticket.raisedFor && ticket.raisedFor._id.equals(userId));
+
+      if (!canView) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+    }
+
+    // Get ticket logs
+    const logs = await TicketLog.getTicketLogs(ticketId, 20);
+
+    res.json({
+      success: true,
+      data: {
+        ticket,
+        logs
+      }
+    });
+  } catch (error) {
+    console.error('Get ticket error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Update ticket status (admin/support only)
+const updateTicketStatus = async (req, res) => {
+  try {
+    const ticketId = req.params.id;
+    const { status, note } = req.body;
+    const userId = req.user._id;
+
+    // Validate status
+    const validStatuses = ['open', 'in-progress', 'resolved', 'closed', 'pending'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status'
+      });
+    }
+
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ticket not found'
+      });
+    }
+
+    const previousStatus = ticket.status;
+
+    // Update ticket
+    ticket.status = status;
+    ticket.history.push({
+      status,
+      note: note || `Status changed to ${status}`,
+      updatedBy: userId
+    });
+
+    await ticket.save();
+
+    // Create log entry
+    await TicketLog.createLog({
+      ticketId: ticket._id,
+      action: 'status_changed',
+      description: `Status changed from ${previousStatus} to ${status}`,
+      previousStatus,
+      newStatus: status,
+      updatedBy: userId,
+      metadata: {
+        note: note || null
+      }
+    });
+
+    await ticket.populate([
+      { path: 'raisedBy', select: 'username email role' },
+      { path: 'raisedFor', select: 'username email' },
+      { path: 'assignedTo', select: 'username email role' }
+    ]);
+
+    res.json({
+      success: true,
+      message: 'Ticket status updated successfully',
+      data: { ticket }
+    });
+  } catch (error) {
+    console.error('Update ticket status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Get ticket statistics
+const getTicketStats = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const userRole = req.user.role;
+
+    let matchQuery = {};
+
+    // For regular users, only show their tickets
+    if (userRole === 'user') {
+      matchQuery = {
+        $or: [
+          { raisedBy: userId },
+          { raisedFor: userId }
+        ]
+      };
+    }
+
+    const stats = await Ticket.aggregate([
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          open: { $sum: { $cond: [{ $eq: ['$status', 'open'] }, 1, 0] } },
+          inProgress: { $sum: { $cond: [{ $eq: ['$status', 'in-progress'] }, 1, 0] } },
+          resolved: { $sum: { $cond: [{ $eq: ['$status', 'resolved'] }, 1, 0] } },
+          closed: { $sum: { $cond: [{ $eq: ['$status', 'closed'] }, 1, 0] } },
+          pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
+          incidental: { $sum: { $cond: [{ $eq: ['$type', 'incidental'] }, 1, 0] } },
+          replacement: { $sum: { $cond: [{ $eq: ['$type', 'replacement'] }, 1, 0] } }
+        }
+      }
+    ]);
+
+    const result = stats[0] || {
+      total: 0,
+      open: 0,
+      inProgress: 0,
+      resolved: 0,
+      closed: 0,
+      pending: 0,
+      incidental: 0,
+      replacement: 0
+    };
+
+    res.json({
+      success: true,
+      data: { stats: result }
+    });
+  } catch (error) {
+    console.error('Get ticket stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+module.exports = {
+  createTicket,
+  getUserTickets,
+  getAllTickets,
+  getTicketById,
+  updateTicketStatus,
+  getTicketStats
+};
