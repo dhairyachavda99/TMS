@@ -17,7 +17,11 @@ const ticketLogSchema = new mongoose.Schema({
       'comment_added',
       'updated',
       'closed',
-      'reopened'
+      'reopened',
+      'accepted',
+      'rejected',
+      'completed',
+      'forwarded'
     ],
     required: true
   },
@@ -27,11 +31,11 @@ const ticketLogSchema = new mongoose.Schema({
   },
   previousStatus: {
     type: String,
-    enum: ['open', 'in-progress', 'resolved', 'closed', 'pending'],
+    enum: ['open', 'in-progress', 'resolved', 'closed', 'pending', 'rejected'],
   },
   newStatus: {
     type: String,
-    enum: ['open', 'in-progress', 'resolved', 'closed', 'pending'],
+    enum: ['open', 'in-progress', 'resolved', 'closed', 'pending', 'rejected'],
     default: null
   },
   previousAssignee: {

@@ -100,11 +100,12 @@ const createTicket = async (req, res) => {
       title,
       description: complaint,
       type: ticketType,
+      status: 'pending',
       roomNo: roomNo.toString(),
       raisedBy: userId,
       raisedFor: raisedForUser ? raisedForUser._id : null,
       history: [{
-        status: 'open',
+        status: 'pending',
         note: 'Ticket created',
         updatedBy: userId
       }]
@@ -117,7 +118,7 @@ const createTicket = async (req, res) => {
       ticketId: ticket._id,
       action: 'created',
       description: `Ticket created with type: ${ticketType}`,
-      newStatus: 'open',
+      newStatus: 'pending',
       updatedBy: userId,
       metadata: {
         roomNo: roomNo.toString(),
@@ -449,11 +450,280 @@ const getTicketStats = async (req, res) => {
   }
 };
 
+// Accept ticket (IT staff only)
+const acceptTicket = async (req, res) => {
+  try {
+    const ticketId = req.params.id;
+    const userId = req.user._id;
+    const userRole = req.user.role;
+
+    if (!['admin', 'support'].includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. IT staff only.'
+      });
+    }
+
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ticket not found'
+      });
+    }
+
+    if (ticket.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Ticket is not in pending status'
+      });
+    }
+
+    ticket.status = 'open';
+    ticket.assignedTo = userId;
+    ticket.history.push({
+      status: 'open',
+      note: 'Ticket accepted by IT staff',
+      updatedBy: userId
+    });
+
+    await ticket.save();
+
+    await TicketLog.createLog({
+      ticketId: ticket._id,
+      action: 'accepted',
+      description: 'Ticket accepted by IT staff',
+      newStatus: 'open',
+      updatedBy: userId
+    });
+
+    res.json({
+      success: true,
+      message: 'Ticket accepted successfully'
+    });
+  } catch (error) {
+    console.error('Accept ticket error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Reject ticket (IT staff only)
+const rejectTicket = async (req, res) => {
+  try {
+    const ticketId = req.params.id;
+    const { reason } = req.body;
+    const userId = req.user._id;
+    const userRole = req.user.role;
+
+    if (!['admin', 'support'].includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. IT staff only.'
+      });
+    }
+
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ticket not found'
+      });
+    }
+
+    if (ticket.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Ticket is not in pending status'
+      });
+    }
+
+    ticket.status = 'rejected';
+    ticket.history.push({
+      status: 'rejected',
+      note: reason || 'Ticket rejected by IT staff',
+      updatedBy: userId
+    });
+
+    await ticket.save();
+
+    await TicketLog.createLog({
+      ticketId: ticket._id,
+      action: 'rejected',
+      description: reason || 'Ticket rejected by IT staff',
+      newStatus: 'rejected',
+      updatedBy: userId
+    });
+
+    res.json({
+      success: true,
+      message: 'Ticket rejected successfully'
+    });
+  } catch (error) {
+    console.error('Reject ticket error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Complete ticket (IT staff only)
+const completeTicket = async (req, res) => {
+  try {
+    const ticketId = req.params.id;
+    const { resolution } = req.body;
+    const userId = req.user._id;
+    const userRole = req.user.role;
+
+    if (!['admin', 'support'].includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. IT staff only.'
+      });
+    }
+
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ticket not found'
+      });
+    }
+
+    if (ticket.status !== 'open') {
+      return res.status(400).json({
+        success: false,
+        message: 'Ticket must be open to complete'
+      });
+    }
+
+    ticket.status = 'closed';
+    ticket.resolution = resolution;
+    ticket.resolvedAt = new Date();
+    ticket.history.push({
+      status: 'closed',
+      note: resolution || 'Ticket completed',
+      updatedBy: userId
+    });
+
+    await ticket.save();
+
+    await TicketLog.createLog({
+      ticketId: ticket._id,
+      action: 'completed',
+      description: resolution || 'Ticket completed',
+      newStatus: 'closed',
+      updatedBy: userId
+    });
+
+    res.json({
+      success: true,
+      message: 'Ticket completed successfully'
+    });
+  } catch (error) {
+    console.error('Complete ticket error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Forward ticket to another IT staff
+const forwardTicket = async (req, res) => {
+  try {
+    const ticketId = req.params.id;
+    const { assignToId, note } = req.body;
+    const userId = req.user._id;
+    const userRole = req.user.role;
+
+    if (!['admin', 'support'].includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. IT staff only.'
+      });
+    }
+
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ticket not found'
+      });
+    }
+
+    const assignToUser = await User.findById(assignToId);
+    if (!assignToUser || !['admin', 'support'].includes(assignToUser.role)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid IT staff member selected'
+      });
+    }
+
+    ticket.assignedTo = assignToId;
+    ticket.history.push({
+      status: ticket.status,
+      note: note || `Ticket forwarded to ${assignToUser.username}`,
+      updatedBy: userId
+    });
+
+    await ticket.save();
+
+    await TicketLog.createLog({
+      ticketId: ticket._id,
+      action: 'forwarded',
+      description: note || `Ticket forwarded to ${assignToUser.username}`,
+      newStatus: ticket.status,
+      updatedBy: userId,
+      metadata: { forwardedTo: assignToId }
+    });
+
+    res.json({
+      success: true,
+      message: 'Ticket forwarded successfully'
+    });
+  } catch (error) {
+    console.error('Forward ticket error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Get IT staff list
+const getITStaff = async (req, res) => {
+  try {
+    const itStaff = await User.find({
+      role: { $in: ['admin', 'support'] }
+    }).select('username email role');
+
+    res.json({
+      success: true,
+      data: { itStaff }
+    });
+  } catch (error) {
+    console.error('Get IT staff error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
 module.exports = {
   createTicket,
   getUserTickets,
   getAllTickets,
   getTicketById,
   updateTicketStatus,
-  getTicketStats
+  getTicketStats,
+  acceptTicket,
+  rejectTicket,
+  completeTicket,
+  forwardTicket,
+  getITStaff
 };

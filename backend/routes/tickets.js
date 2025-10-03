@@ -203,55 +203,25 @@ router.get('/:ticketId/logs', authenticateToken, async (req, res) => {
   }
 });
 
-// Enhanced validation middleware specifically for the form
-const validateFormData = (req, res, next) => {
-  const { ticketType, complaint, roomNo } = req.body;
-  const errors = [];
+// IT Staff Management Routes
+const { acceptTicket, rejectTicket, completeTicket, forwardTicket, getITStaff, getAllTickets } = require('../controllers/ticketController');
 
-  // Validate ticket type
-  if (!ticketType) {
-    errors.push({ field: 'ticketType', message: 'Please select a ticket type' });
-  } else if (!['incidental', 'replacement'].includes(ticketType)) {
-    errors.push({ field: 'ticketType', message: 'Invalid ticket type selected' });
-  }
+// Get all tickets (for IT staff)
+router.get('/', authenticateToken, getAllTickets);
 
-  // Validate complaint
-  if (!complaint || complaint.trim() === '') {
-    errors.push({ field: 'complaint', message: 'Please describe your complaint' });
-  } else if (complaint.trim().length < 10) {
-    errors.push({ field: 'complaint', message: 'Please provide a more detailed description (at least 10 characters)' });
-  } else if (complaint.length > 2000) {
-    errors.push({ field: 'complaint', message: 'Description is too long (maximum 2000 characters)' });
-  }
+// Accept ticket
+router.put('/:id/accept', authenticateToken, acceptTicket);
 
-  // Validate room number
-  if (!roomNo) {
-    errors.push({ field: 'roomNo', message: 'Please enter your room number' });
-  } else if (!/^\d+$/.test(roomNo.toString().trim())) {
-    errors.push({ field: 'roomNo', message: 'Room number should contain only numbers' });
-  } else if (roomNo.toString().trim().length > 10) {
-    errors.push({ field: 'roomNo', message: 'Room number is too long' });
-  }
+// Reject ticket
+router.put('/:id/reject', authenticateToken, rejectTicket);
 
-  if (errors.length > 0) {
-    return res.status(400).json({
-      success: false,
-      message: 'Please fix the following errors:',
-      errors
-    });
-  }
+// Complete ticket
+router.put('/:id/complete', authenticateToken, completeTicket);
 
-  // Clean up the data
-  req.body.complaint = complaint.trim();
-  req.body.roomNo = roomNo.toString().trim();
-  req.body.raisedFor = req.body.raisedFor ? req.body.raisedFor.trim() : '';
+// Forward ticket
+router.put('/:id/forward', authenticateToken, forwardTicket);
 
-  next();
-};
-
-// Update the route to use enhanced validation
-router.post('/generate', authenticateToken, validateFormData, async (req, res) => {
-  // ... (same implementation as above)
-});
+// Get IT staff list
+router.get('/it-staff', authenticateToken, getITStaff);
 
 module.exports = router;

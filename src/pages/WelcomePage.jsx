@@ -310,7 +310,7 @@ export default function WelcomePage() {
                   </button>
                 )}
                 
-                <button onClick={() => {user?.role === 'it_staff' ? window.location.href = 'welcome/manage' : window.location.href = 'welcome/ViewTickets'} } className="w-full p-3 text-left bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
+                <button onClick={() => {user?.role === 'it_staff' ? window.location.href = '/welcome/ManageTickets' : window.location.href = 'welcome/ViewTickets'} } className="w-full p-3 text-left bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
                   <div className="flex items-center gap-3">
                     <Activity className="w-5 h-5 text-blue-600" />
                     <span className="text-sm font-medium">

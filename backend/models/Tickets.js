@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const ticketHistorySchema = new mongoose.Schema({
   status: {
     type: String,
-    enum: ['open', 'in-progress', 'resolved', 'closed', 'pending'],
+    enum: ['open', 'in-progress', 'resolved', 'closed', 'pending', 'rejected'],
     required: true
   },
   note: {
@@ -41,8 +41,21 @@ const ticketSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['open', 'in-progress', 'resolved', 'closed', 'pending'],
-    default: 'open'
+    enum: ['open', 'in-progress', 'resolved', 'closed', 'pending', 'rejected'],
+    default: 'pending'
+  },
+  priority: {
+    type: String,
+    enum: ['low', 'medium', 'high', 'urgent'],
+    default: 'medium'
+  },
+  resolution: {
+    type: String,
+    trim: true,
+    maxlength: 1000
+  },
+  resolvedAt: {
+    type: Date
   },
   roomNo: {
     type: String,
@@ -65,6 +78,10 @@ const ticketSchema = new mongoose.Schema({
     default: null
   },
   history: [ticketHistorySchema],
+  tags: [{
+    type: String,
+    trim: true
+  }],
   createdAt: {
     type: Date,
     default: Date.now

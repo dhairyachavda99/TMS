@@ -7,6 +7,7 @@ import Ticketgenerate from './pages/Ticketgenerate';
 import ViewTickets from './pages/ViewTickets';
 import UpdateProfile from './pages/UpdateProfile';
 import SystemSettings from './pages/SystemSettings';
+import ManageTickets from './pages/ManageTickets';
 
 const App = () => {
   return (
@@ -19,6 +20,7 @@ const App = () => {
         <Route path="/welcome/ViewTickets" element={<ViewTickets />}/>
         <Route path="/welcome/UpdateProfile" element={<UpdateProfile />}/>
         <Route path="/welcome/SystemSettings" element={<SystemSettings />}/>
+        <Route path="/welcome/ManageTickets" element={<ManageTickets />}/>
       </Routes>
     </Router>
   );
