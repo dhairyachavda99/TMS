@@ -6,6 +6,7 @@ const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
 const ticketRoutes = require('./routes/tickets');
 const profileRoutes = require('./routes/profileRoutes');
+const userRoutes = require('./routes/users');
 //const viewTickets = require('./routes/ViewTickets');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { updateProfile } = require('./controllers/authController');
@@ -50,7 +51,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/profile', profileRoutes);
-//app.use('/api/viewtickets', viewTickets);
+app.use('/api/users', userRoutes);
+const viewTicketsRoute = require('./routes/viewTickets');
+app.use('/api/viewtickets', viewTicketsRoute);
 
 
 // Health check route

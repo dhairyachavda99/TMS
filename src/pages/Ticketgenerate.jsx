@@ -122,7 +122,7 @@ export default function TicketGenerator() {
       </div> */}
 
       {/* Form Container */}
-      <div className="max-w-2xl mx-auto px-6 py-12">
+      <div className="h-full flex items-center justify-center px-6 py-12">
         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
           <div className="p-8 border-b border-gray-100" style={{ backgroundColor: '#272757' }}>
             <h2 className="text-xl font-semibold text-white">Create New Ticket</h2>

@@ -22,9 +22,15 @@ router.post('/generate', authenticateToken, validateTicketCreation, async (req, 
     // Handle raisedFor - find user if specified
     let raisedForUser = null;
 
-if (raisedFor && raisedFor.trim() !== '') {
-  raisedForUser = await User.findOne({ username: raisedFor });
-}
+    if (raisedFor && raisedFor.trim() !== '') {
+      // Try to find user by username first, then by a partial match
+      raisedForUser = await User.findOne({ 
+        $or: [
+          { username: raisedFor },
+          { username: { $regex: raisedFor.split(' ')[0], $options: 'i' } }
+        ]
+      });
+    }
 
 
     // Create the ticket

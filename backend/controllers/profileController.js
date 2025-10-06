@@ -1,5 +1,6 @@
 // controllers/profileController.js
-const User = require('../models/User'); // Import User model instead of Profile
+const User = require('../models/User');
+const bcrypt = require('bcryptjs');
 
 // GET current user profile
 const getProfile = async (req, res) => {
@@ -29,42 +30,48 @@ const getProfile = async (req, res) => {
 // UPDATE user profile
 const updateProfile = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { password, currentPassword } = req.body;
     const userId = req.user._id;
 
-    // Check if username already exists (if changing username)
-    if (username && username !== req.user.username) {
-      const existingUser = await User.findOne({ username });
-      if (existingUser) {
-        return res.status(400).json({
-          success: false,
-          message: 'Username already exists'
-        });
-      }
-    }
-
-    // Prepare update data
-    const updateData = { updatedAt: Date.now() };
-    if (username) updateData.username = username;
-    if (password) updateData.password = password;
-
-    // Update user
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      updateData,
-      { new: true, runValidators: true }
-    ).select('-password');
-
-    if (!updatedUser) {
+    // Get user with password for validation
+    const user = await User.findById(userId);
+    if (!user) {
       return res.status(404).json({
         success: false,
         message: 'User not found'
       });
     }
 
+    // If updating password, validate current password
+    if (password) {
+      if (!currentPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Current password is required'
+        });
+      }
+
+      // Check if current password is correct
+      const isCurrentPasswordValid = await user.comparePassword(currentPassword);
+      if (!isCurrentPasswordValid) {
+        return res.status(400).json({
+          success: false,
+          message: 'Current password is incorrect'
+        });
+      }
+
+      // Update password
+      user.password = password;
+      user.updatedAt = Date.now();
+      await user.save();
+    }
+
+    // Return updated user without password
+    const updatedUser = await User.findById(userId).select('-password');
+
     res.json({
       success: true,
-      message: 'Profile updated successfully',
+      message: 'Password updated successfully',
       user: updatedUser
     });
 
@@ -77,13 +84,6 @@ const updateProfile = async (req, res) => {
         success: false,
         message: 'Validation failed',
         errors
-      });
-    }
-
-    if (error.code === 11000) {
-      return res.status(400).json({
-        success: false,
-        message: 'Username already exists'
       });
     }
 
