@@ -12,6 +12,10 @@ export default function TicketLoginPage() {
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState('');
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -110,7 +114,7 @@ export default function TicketLoginPage() {
           </div> */}
 
           {/* Login Form */}
-          <div className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             {/* Username Field */}
             <div className="space-y-2">
               <label htmlFor="username" className="block text-sm font-medium text-gray-700">
@@ -179,6 +183,7 @@ export default function TicketLoginPage() {
               </div>
               <button
                 type="button"
+                onClick={() => setShowForgotPassword(true)}
                 className="text-sm font-medium text-purple-600 hover:text-purple-800 transition-colors hover:underline"
               >
                 Forgot password?
@@ -188,7 +193,6 @@ export default function TicketLoginPage() {
             {/* Sign In Button */}
             <button
               type="submit"
-              onClick={handleSubmit}
               disabled={isLoading || !formData.username || !formData.password}
               className="w-full py-3 px-4 text-white font-semibold rounded-lg shadow-lg transform transition-all duration-200 hover:scale-[1.02] hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               style={{
@@ -207,7 +211,7 @@ export default function TicketLoginPage() {
                 'Sign In'
               )}
             </button>
-          </div>
+          </form>
 
           {/* Footer */}
           <div className="mt-8 text-center">
@@ -219,6 +223,92 @@ export default function TicketLoginPage() {
             </p>
           </div>
         </div>
+
+        {/* Forgot Password Modal */}
+        {showForgotPassword && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg max-w-md w-full p-6">
+              <h3 className="text-lg font-semibold mb-4">Reset Password</h3>
+              
+              {forgotMessage && (
+                <div className={`p-3 rounded-lg mb-4 ${
+                  forgotMessage.includes('sent') 
+                    ? 'bg-green-50 text-green-700 border border-green-200' 
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}>
+                  {forgotMessage}
+                </div>
+              )}
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-200 focus:border-purple-400"
+                    placeholder="Enter your email address"
+                    required
+                  />
+                </div>
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={async () => {
+                      if (!forgotEmail) {
+                        setForgotMessage('Please enter your email address');
+                        return;
+                      }
+                      
+                      setForgotLoading(true);
+                      setForgotMessage('');
+                      
+                      try {
+                        const response = await fetch('http://localhost:5000/api/auth/forgot-password', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ email: forgotEmail })
+                        });
+                        
+                        const data = await response.json();
+                        setForgotMessage(data.message);
+                        
+                        if (data.success) {
+                          setTimeout(() => {
+                            setShowForgotPassword(false);
+                            setForgotEmail('');
+                            setForgotMessage('');
+                          }, 3000);
+                        }
+                      } catch (err) {
+                        setForgotMessage('Network error. Please try again.');
+                      } finally {
+                        setForgotLoading(false);
+                      }
+                    }}
+                    disabled={forgotLoading}
+                    className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    {forgotLoading ? 'Sending...' : 'Send New Password'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowForgotPassword(false);
+                      setForgotEmail('');
+                      setForgotMessage('');
+                    }}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Bottom branding */}
         <div className="mt-8 text-center">

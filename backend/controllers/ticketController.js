@@ -1,6 +1,7 @@
 const Ticket = require('../models/Tickets');
 const TicketLog = require('../models/TicketLog');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 
 // Create a new ticket
 const createTicket = async (req, res) => {
@@ -242,6 +243,7 @@ const getAllTickets = async (req, res) => {
       .populate('raisedBy', 'username email role')
       .populate('raisedFor', 'username email')
       .populate('assignedTo', 'username email role')
+      .populate('history.updatedBy', 'username email role')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -416,10 +418,9 @@ const getTicketStats = async (req, res) => {
           _id: null,
           total: { $sum: 1 },
           open: { $sum: { $cond: [{ $eq: ['$status', 'open'] }, 1, 0] } },
-          inProgress: { $sum: { $cond: [{ $eq: ['$status', 'in-progress'] }, 1, 0] } },
           resolved: { $sum: { $cond: [{ $eq: ['$status', 'resolved'] }, 1, 0] } },
-          closed: { $sum: { $cond: [{ $eq: ['$status', 'closed'] }, 1, 0] } },
           pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
+          rejected: { $sum: { $cond: [{ $eq: ['$status', 'rejected'] }, 1, 0] } },
           incidental: { $sum: { $cond: [{ $eq: ['$type', 'incidental'] }, 1, 0] } },
           replacement: { $sum: { $cond: [{ $eq: ['$type', 'replacement'] }, 1, 0] } }
         }
@@ -429,10 +430,9 @@ const getTicketStats = async (req, res) => {
     const result = stats[0] || {
       total: 0,
       open: 0,
-      inProgress: 0,
       resolved: 0,
-      closed: 0,
       pending: 0,
+      rejected: 0,
       incidental: 0,
       replacement: 0
     };
@@ -457,7 +457,7 @@ const acceptTicket = async (req, res) => {
     const userId = req.user._id;
     const userRole = req.user.role;
 
-    if (!['admin', 'support'].includes(userRole)) {
+    if (!['admin', 'it_staff'].includes(userRole)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied. IT staff only.'
@@ -518,7 +518,7 @@ const rejectTicket = async (req, res) => {
     const userId = req.user._id;
     const userRole = req.user.role;
 
-    if (!['admin', 'support'].includes(userRole)) {
+    if (!['admin', 'it_staff'].includes(userRole)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied. IT staff only.'
@@ -578,7 +578,7 @@ const completeTicket = async (req, res) => {
     const userId = req.user._id;
     const userRole = req.user.role;
 
-    if (!['admin', 'support'].includes(userRole)) {
+    if (!['admin', 'it_staff'].includes(userRole)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied. IT staff only.'
@@ -600,11 +600,11 @@ const completeTicket = async (req, res) => {
       });
     }
 
-    ticket.status = 'closed';
+    ticket.status = 'resolved';
     ticket.resolution = resolution;
     ticket.resolvedAt = new Date();
     ticket.history.push({
-      status: 'closed',
+      status: 'resolved',
       note: resolution || 'Ticket completed',
       updatedBy: userId
     });
@@ -615,7 +615,7 @@ const completeTicket = async (req, res) => {
       ticketId: ticket._id,
       action: 'completed',
       description: resolution || 'Ticket completed',
-      newStatus: 'closed',
+      newStatus: 'resolved',
       updatedBy: userId
     });
 
@@ -640,7 +640,7 @@ const forwardTicket = async (req, res) => {
     const userId = req.user._id;
     const userRole = req.user.role;
 
-    if (!['admin', 'support'].includes(userRole)) {
+    if (!['admin', 'it_staff'].includes(userRole)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied. IT staff only.'
@@ -656,7 +656,7 @@ const forwardTicket = async (req, res) => {
     }
 
     const assignToUser = await User.findById(assignToId);
-    if (!assignToUser || !['admin', 'support'].includes(assignToUser.role)) {
+    if (!assignToUser || !['admin', 'it_staff'].includes(assignToUser.role)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid IT staff member selected'
@@ -681,6 +681,17 @@ const forwardTicket = async (req, res) => {
       metadata: { forwardedTo: assignToId }
     });
 
+    // Create notification for the assigned user
+    const notification = new Notification({
+      recipient: assignToId,
+      sender: userId,
+      type: 'ticket_forwarded',
+      title: 'Ticket Forwarded to You',
+      message: `Ticket ${ticket.ticketNumber} has been forwarded to you by ${req.user.username}`,
+      ticketId: ticket._id
+    });
+    await notification.save();
+
     res.json({
       success: true,
       message: 'Ticket forwarded successfully'
@@ -698,7 +709,7 @@ const forwardTicket = async (req, res) => {
 const getITStaff = async (req, res) => {
   try {
     const itStaff = await User.find({
-      role: { $in: ['admin', 'support'] }
+      role: { $in: ['admin', 'it_staff'] }
     }).select('username email role');
 
     res.json({

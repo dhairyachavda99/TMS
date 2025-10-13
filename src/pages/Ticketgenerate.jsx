@@ -123,7 +123,7 @@ export default function TicketGenerator() {
 
       {/* Form Container */}
       <div className="h-full flex items-center justify-center px-6 py-12">
-        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden max-w-2xl w-full">
           <div className="p-8 border-b border-gray-100" style={{ backgroundColor: '#272757' }}>
             <h2 className="text-xl font-semibold text-white">Create New Ticket</h2>
             <p className="text-white/80 mt-1">Fill out the form below to generate your support ticket</p>

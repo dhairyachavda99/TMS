@@ -2,6 +2,36 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 
+// Password validation function
+const validatePassword = (password) => {
+  const errors = [];
+  
+  if (password.length < 8) {
+    errors.push('Password must be at least 8 characters long');
+  }
+  
+  if (!/[A-Z]/.test(password)) {
+    errors.push('Password must contain at least one uppercase letter');
+  }
+  
+  if (!/[a-z]/.test(password)) {
+    errors.push('Password must contain at least one lowercase letter');
+  }
+  
+  if (!/\d/.test(password)) {
+    errors.push('Password must contain at least one number');
+  }
+  
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    errors.push('Password must contain at least one special character');
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+};
+
 // GET current user profile
 const getProfile = async (req, res) => {
   try {
@@ -57,6 +87,16 @@ const updateProfile = async (req, res) => {
         return res.status(400).json({
           success: false,
           message: 'Current password is incorrect'
+        });
+      }
+
+      // Validate new password strength
+      const passwordValidation = validatePassword(password);
+      if (!passwordValidation.isValid) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password does not meet security requirements',
+          errors: passwordValidation.errors
         });
       }
 

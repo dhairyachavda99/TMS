@@ -63,108 +63,108 @@ userSchema.pre('save', async function(next) {
 
 const User = mongoose.model('User', userSchema);
 
-// Sample users data - Added IT Staff users
+// Sample users data - Added IT Staff users with strong passwords
 const sampleUsers = [
   {
     username: 'admin',
     email: 'admin@ticketmanagement.com',
-    password: 'admin123',
+    password: 'Admin123!',
     role: 'admin'
   },
    {
     username: 'Hetal Savla',
     email: 'hetalsavla99@gmail.com',
-    password: 'Hetal1234',
+    password: 'Hetal123!',
     role: 'admin'
   },
   {
     username: 'Asmita Zala',
     email: 'asmita2@gmail.com',
-    password: 'asmita2',
+    password: 'Asmita123!',
     role: 'user'
   },
   {
     username: 'Shaunak Purohit',
     email: 'shaunak11@gmail.com',
-    password: 'shaunak11',
+    password: 'Shaunak123!',
     role: 'user'
   },
   {
     username: 'Khushal Rajani',
     email: 'khuushal44@gmail.com',
-    password: 'asmita2',
+    password: 'Khushal123!',
     role: 'user'
   },
   {
     username: 'Sawan Sanghvi',
     email: 'savan77@gmail.com',
-    password: 'sawan77',
+    password: 'Sawan123!',
     role: 'user'
   },
   {
     username: 'Imran Modi',
     email: 'imran66@gmail.com',
-    password: 'imran66',
+    password: 'Imran123!',
     role: 'user'
   },
   {
     username: 'Yash Kotecha',
     email: 'yash1@gmail.com',
-    password: 'yash11',
+    password: 'Yash123!',
     role: 'user'
   },
   {
     username: 'Devki Trivedi',
     email: 'devkit@gmail.com',
-    password: 'devki10',
+    password: 'Devki123!',
     role: 'user'
   },
   {
     username: 'Rachel Thannaraj',
     email: 'rachelstanley@gmail.com',
-    password: 'rachels',
+    password: 'Rachel123!',
     role: 'user'
   },
   {
     username: 'Daya Sidhdhapura',
     email: 'daya55@gmail.com',
-    password: 'daya55',
+    password: 'Daya123!',
     role: 'user'
   },
   {
     username: 'Reetu Tejwani',
     email: 'reetu00@gmail.com',
-    password: 'reetu00',
+    password: 'Reetu123!',
     role: 'user'
   },
   {
     username: 'Smita Nayak',
     email: 'smita@gmail.com',
-    password: 'smitaaa1',
+    password: 'Smita123!',
     role: 'user'
   },
   {
     username: 'support_user',
     email: 'support@ticketmanagement.com',
-    password: 'support123',
+    password: 'Support123!',
     role: 'support'
   },
   {
     username: 'Vinit Haria',
     email: 'vinit33@gmail.com',
-    password: 'vinit33',
+    password: 'Vinit123!',
     role: 'support'
   },
   {
     username: 'Siddharth Sheth',
     email: 'siddharth22@gmail.com',
-    password: 'siddharth22',
+    password: 'Siddharth123!',
     role: 'support'
   },
   {
     username: 'Priyanshi Sanghani',
     email: 'Priyanshi88@gmail.com',
-    password: 'priya88',
+    password: 'Priyanshi123!',
     role: 'support'
   },
 
@@ -172,13 +172,13 @@ const sampleUsers = [
   {
     username: 'it_manager',
     email: 'itmanager@ticketmanagement.com',
-    password: 'itstaff123',
+    password: 'ItManager123!',
     role: 'it_staff'
   },
   {
     username: 'tech_specialist',
     email: 'techspecialist@ticketmanagement.com',
-    password: 'itstaff123',
+    password: 'TechSpec123!',
     role: 'it_staff'
   }
 ];
@@ -199,15 +199,15 @@ async function seedDatabase() {
     }
 
     console.log('🎉 Database seeding completed successfully!');
-    console.log('\n🔐 Sample login credentials:');
+    console.log('\n🔐 Sample login credentials (Strong Passwords):');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('Username: admin          | Password: admin123    | Role: admin');
-    console.log('Username: john_doe       | Password: password123 | Role: user');
-    console.log('Username: jane_smith     | Password: password123 | Role: user');
-    console.log('Username: support_user   | Password: support123  | Role: support');
-    console.log('Username: it_manager     | Password: itstaff123  | Role: it_staff');
-    console.log('Username: tech_specialist| Password: itstaff123  | Role: it_staff');
+    console.log('Username: admin          | Password: Admin123!      | Role: admin');
+    console.log('Username: Hetal Savla    | Password: Hetal123!      | Role: admin');
+    console.log('Username: support_user   | Password: Support123!    | Role: support');
+    console.log('Username: it_manager     | Password: ItManager123!  | Role: it_staff');
+    console.log('Username: tech_specialist| Password: TechSpec123!   | Role: it_staff');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('Note: All passwords now require: 8+ chars, uppercase, lowercase, number, special char');
 
   } catch (error) {
     console.error('❌ Error seeding database:', error);

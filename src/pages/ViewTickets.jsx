@@ -55,9 +55,10 @@ const ViewTickets = () => {
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'open': return <AlertCircle className="w-4 h-4 text-red-500" />;
-      case 'in-progress': return <Clock className="w-4 h-4 text-yellow-500" />;
+      case 'pending': return <Clock className="w-4 h-4 text-orange-500" />;
+      case 'open': return <AlertCircle className="w-4 h-4 text-blue-500" />;
       case 'resolved': return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'rejected': return <AlertCircle className="w-4 h-4 text-red-500" />;
       default: return <AlertCircle className="w-4 h-4 text-gray-500" />;
     }
   };
@@ -109,9 +110,10 @@ const ViewTickets = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="all">All Status</option>
+              <option value="pending">Pending</option>
               <option value="open">Open</option>
-              <option value="in-progress">In Progress</option>
               <option value="resolved">Resolved</option>
+              <option value="rejected">Rejected</option>
             </select>
 
             <div className="flex items-center justify-between">

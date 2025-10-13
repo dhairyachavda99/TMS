@@ -1,12 +1,33 @@
 const User = require('../models/User');
+const Ticket = require('../models/Tickets');
 
 // Get welcome dashboard data
 const getWelcomeData = async (req, res) => {
   try {
     const user = req.user;
     
-    // Example: Get user's ticket count, recent activities, etc.
-    // You can implement actual ticket counting logic when you add ticket models
+    // Get role-specific ticket statistics
+    let ticketQuery = {};
+    
+    if (user.role === 'user') {
+      // Users see only their own tickets
+      ticketQuery = {
+        $or: [
+          { raisedBy: user._id },
+          { raisedFor: user._id }
+        ]
+      };
+    }
+    // Admin and IT staff see all tickets (no query filter)
+
+    const [totalTickets, openTickets, resolvedTickets, pendingTickets, rejectedTickets] = await Promise.all([
+      Ticket.countDocuments(ticketQuery),
+      Ticket.countDocuments({ ...ticketQuery, status: 'open' }),
+      Ticket.countDocuments({ ...ticketQuery, status: 'resolved' }),
+      Ticket.countDocuments({ ...ticketQuery, status: 'pending' }),
+      Ticket.countDocuments({ ...ticketQuery, status: 'rejected' })
+    ]);
+
     const dashboardData = {
       user: {
         name: user.username,
@@ -16,10 +37,11 @@ const getWelcomeData = async (req, res) => {
         joinedDate: user.createdAt
       },
       stats: {
-        totalTickets: 0, // Implement actual ticket counting logic
-        openTickets: 0,
-        resolvedTickets: 0,
-        pendingTickets: 0
+        totalTickets,
+        openTickets,
+        resolvedTickets,
+        pendingTickets,
+        rejectedTickets
       },
       recentActivity: [
         {

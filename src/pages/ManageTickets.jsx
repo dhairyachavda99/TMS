@@ -4,6 +4,7 @@ import { Search, CheckCircle, XCircle, Clock, User, Calendar, ArrowRight, Refres
 const ManageTickets = () => {
   const [tickets, setTickets] = useState([]);
   const [itStaff, setItStaff] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -17,9 +18,25 @@ const ManageTickets = () => {
   const [rejectReason, setRejectReason] = useState('');
 
   useEffect(() => {
+    fetchCurrentUser();
     fetchTickets();
     fetchITStaff();
   }, []);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/me', {
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setCurrentUser(data.data.user);
+      }
+    } catch (err) {
+      console.error('Failed to fetch current user:', err);
+    }
+  };
 
   const fetchTickets = async () => {
     try {
@@ -60,6 +77,7 @@ const ManageTickets = () => {
       });
 
       const data = await response.json();
+      console.log('IT Staff response:', data);
       if (data.success) {
         setItStaff(data.data.itStaff || []);
       }
@@ -161,29 +179,33 @@ const ManageTickets = () => {
   const handleForward = async () => {
     try {
       setActionLoading(true);
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      console.log('Forward data:', forwardData);
+      console.log('Selected ticket:', selectedTicket._id);
       
       const response = await fetch(`http://localhost:5000/api/tickets/${selectedTicket._id}/forward`, {
         method: 'PUT',
         credentials: 'include',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(forwardData)
       });
 
       const data = await response.json();
+      console.log('Forward response:', data);
+      
       if (data.success) {
         fetchTickets();
         setShowForwardModal(false);
         setForwardData({ assignToId: '', note: '' });
         setSelectedTicket(null);
         setError('');
+        alert('Ticket forwarded successfully!');
       } else {
         setError(data.message || 'Failed to forward ticket');
       }
     } catch (err) {
+      console.error('Forward error:', err);
       setError('Failed to forward ticket');
     } finally {
       setActionLoading(false);
@@ -205,7 +227,7 @@ const ManageTickets = () => {
     switch (status) {
       case 'pending': return <Clock className="w-4 h-4 text-orange-500" />;
       case 'open': return <Clock className="w-4 h-4 text-blue-500" />;
-      case 'closed': return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'resolved': return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'rejected': return <XCircle className="w-4 h-4 text-red-500" />;
       default: return <Clock className="w-4 h-4 text-gray-500" />;
     }
@@ -215,7 +237,7 @@ const ManageTickets = () => {
     switch (status) {
       case 'pending': return 'bg-orange-100 text-orange-800';
       case 'open': return 'bg-blue-100 text-blue-800';
-      case 'closed': return 'bg-green-100 text-green-800';
+      case 'resolved': return 'bg-green-100 text-green-800';
       case 'rejected': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -279,7 +301,7 @@ const ManageTickets = () => {
               <option value="all">All Status</option>
               <option value="pending">Pending</option>
               <option value="open">Open</option>
-              <option value="closed">Closed</option>
+              <option value="resolved">Resolved</option>
               <option value="rejected">Rejected</option>
             </select>
 
@@ -336,6 +358,17 @@ const ManageTickets = () => {
                       <span className="text-gray-600">{formatDate(ticket.createdAt)}</span>
                     </div>
                   </div>
+                  
+                  {ticket.assignedTo && ticket.assignedTo._id === currentUser?._id && ticket.history && ticket.history.length > 0 && (
+                    <div className="mt-3 p-3 bg-blue-50 border-l-4 border-blue-400 rounded-lg">
+                      <p className="text-sm text-blue-700 font-medium">
+                        <strong>Message from {ticket.history[ticket.history.length - 1]?.updatedBy?.username || 'IT Staff'}:</strong>
+                      </p>
+                      <p className="text-sm text-blue-600 mt-1">
+                        {ticket.history[ticket.history.length - 1]?.note || 'Ticket forwarded to you'}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Action Buttons */}
@@ -367,27 +400,45 @@ const ManageTickets = () => {
 
                   {ticket.status === 'open' && (
                     <>
-                      <button
-                        onClick={() => {
-                          setSelectedTicket(ticket);
-                          setShowCompleteModal(true);
-                        }}
-                        disabled={actionLoading}
-                        className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 disabled:opacity-50"
-                      >
-                        Complete
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedTicket(ticket);
-                          setShowForwardModal(true);
-                        }}
-                        disabled={actionLoading}
-                        className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
-                      >
-                        <ArrowRight className="w-3 h-3" />
-                        Forward
-                      </button>
+                      {/* Complete button only for assigned IT staff */}
+                      {ticket.assignedTo && ticket.assignedTo._id === currentUser?._id && (
+                        <button
+                          onClick={() => {
+                            setSelectedTicket(ticket);
+                            setShowCompleteModal(true);
+                          }}
+                          disabled={actionLoading}
+                          className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 disabled:opacity-50"
+                        >
+                          Complete
+                        </button>
+                      )}
+                      {/* Forward button only if no one is assigned or current user accepted it */}
+                      {!ticket.assignedTo && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setSelectedTicket(ticket);
+                              setShowCompleteModal(true);
+                            }}
+                            disabled={actionLoading}
+                            className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 disabled:opacity-50"
+                          >
+                            Complete
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedTicket(ticket);
+                              setShowForwardModal(true);
+                            }}
+                            disabled={actionLoading}
+                            className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+                          >
+                            <ArrowRight className="w-3 h-3" />
+                            Forward
+                          </button>
+                        </>
+                      )}
                     </>
                   )}
                 </div>

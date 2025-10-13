@@ -7,6 +7,7 @@ const dashboardRoutes = require('./routes/dashboard');
 const ticketRoutes = require('./routes/tickets');
 const profileRoutes = require('./routes/profileRoutes');
 const userRoutes = require('./routes/users');
+const notificationRoutes = require('./routes/notifications');
 //const viewTickets = require('./routes/ViewTickets');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { updateProfile } = require('./controllers/authController');
@@ -52,6 +53,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/notifications', notificationRoutes);
 const viewTicketsRoute = require('./routes/viewTickets');
 app.use('/api/viewtickets', viewTicketsRoute);
 

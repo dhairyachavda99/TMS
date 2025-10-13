@@ -17,19 +17,136 @@ export default function WelcomePage() {
   const [dashboardData, setDashboardData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     fetchWelcomeData();
+    fetchNotifications();
+    fetchUnreadCount();
+    fetchTicketStats();
   }, []);
 
-  const graphData = {
-    ticketsByStatus: [
-      {name: 'Total Tickets', count: 100, fill: '#6E00B3'},
-      {name: 'Open Tickets', count: 80, fill: 'blue'},
-      {name: 'Resolved Tickets', count: 60, fill: '#0da11aff'},
-      {name: 'Pending Tickets', count: 20, fill: '#ff0000ff'}
-    ]
-  }
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showNotifications && !event.target.closest('.notification-dropdown')) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showNotifications]);
+
+  const [ticketStats, setTicketStats] = useState(null);
+
+  const fetchTicketStats = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      const response = await fetch('http://localhost:5000/api/viewtickets', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        const tickets = data.tickets;
+        
+        // Calculate statistics
+        const total = tickets.length;
+        const open = tickets.filter(t => t.status === 'open').length;
+        const resolved = tickets.filter(t => t.status === 'resolved').length;
+        const pending = tickets.filter(t => t.status === 'pending').length;
+        const inProgress = tickets.filter(t => t.status === 'in-progress').length;
+        const rejected = tickets.filter(t => t.status === 'rejected').length;
+        
+        const stats = {
+          total,
+          open,
+          resolved,
+          pending,
+          inProgress,
+          rejected,
+          chartData: [
+            { name: 'Total', count: total, fill: '#6E00B3' },
+            { name: 'Open', count: open, fill: '#3B82F6' },
+            { name: 'Resolved', count: resolved, fill: '#10B981' },
+            { name: 'Pending', count: pending, fill: '#F59E0B' },
+            { name: 'Rejected', count: rejected, fill: '#EF4444' }
+          ]
+        };
+        
+        setTicketStats(stats);
+      }
+    } catch (error) {
+      console.error('Error fetching ticket stats:', error);
+    }
+  };
+
+  const getGraphData = () => {
+    if (!ticketStats?.chartData) return { ticketsByStatus: [] };
+    return { ticketsByStatus: ticketStats.chartData };
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/notifications', {
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      console.log('Notifications response:', data);
+      if (data.success) {
+        setNotifications(data.data.notifications || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error);
+    }
+  };
+
+  const fetchUnreadCount = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/notifications/unread-count', {
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      console.log('Unread count response:', data);
+      if (data.success) {
+        setUnreadCount(data.data.count || 0);
+      }
+    } catch (error) {
+      console.error('Failed to fetch unread count:', error);
+    }
+  };
+
+  const markAsRead = async (notificationId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/notifications/${notificationId}/read`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      console.log('Mark read response:', data);
+      if (data.success) {
+        fetchNotifications();
+        fetchUnreadCount();
+      }
+    } catch (error) {
+      console.error('Failed to mark as read:', error);
+    }
+  };
 
   const fetchWelcomeData = async () => {
     try {
@@ -152,10 +269,59 @@ export default function WelcomePage() {
             </div>
 
             <div className="flex items-center gap-4">
-              <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors relative">
-                <Bell className="w-5 h-5" />
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
-              </button>
+              <div className="relative notification-dropdown">
+                <button 
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors relative"
+                >
+                  <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+                
+                {showNotifications && (
+                  <div className="absolute right-0 top-12 w-80 bg-white rounded-lg shadow-lg border z-50 max-h-96 overflow-y-auto">
+                    <div className="p-4 border-b">
+                      <h3 className="font-semibold text-gray-900">Notifications</h3>
+                    </div>
+                    {notifications.length === 0 ? (
+                      <div className="p-4 text-center text-gray-500">
+                        No notifications
+                      </div>
+                    ) : (
+                      notifications.map((notification) => (
+                        <div 
+                          key={notification._id} 
+                          className={`p-4 border-b hover:bg-gray-50 cursor-pointer ${
+                            !notification.isRead ? 'bg-blue-50' : ''
+                          }`}
+                          onClick={() => markAsRead(notification._id)}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <h4 className="font-medium text-sm text-gray-900">
+                                {notification.title}
+                              </h4>
+                              <p className="text-xs text-gray-600 mt-1">
+                                {notification.message}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-2">
+                                {new Date(notification.createdAt).toLocaleString()}
+                              </p>
+                            </div>
+                            {!notification.isRead && (
+                              <div className="w-2 h-2 bg-blue-500 rounded-full ml-2 mt-1"></div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
 
               <div className="flex items-center gap-3 border-l pl-4">
                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100">
@@ -213,13 +379,13 @@ export default function WelcomePage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-sm border p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 mb-1">Total Tickets</p>
                 <p className="text-3xl font-bold text-purple-600">
-                  {dashboardData?.stats?.totalTickets || 100}
+                  {ticketStats?.total || 0}
                 </p>
               </div>
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -233,7 +399,7 @@ export default function WelcomePage() {
               <div>
                 <p className="text-sm text-gray-600 mb-1">Open Tickets</p>
                 <p className="text-3xl font-bold text-blue-600">
-                  {dashboardData?.stats?.openTickets || 100}
+                  {ticketStats?.open || 0}
                 </p>
               </div>
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -247,7 +413,7 @@ export default function WelcomePage() {
               <div>
                 <p className="text-sm text-gray-600 mb-1">Resolved</p>
                 <p className="text-3xl font-bold text-green-600">
-                  {dashboardData?.stats?.resolvedTickets || 90}
+                  {ticketStats?.resolved || 0}
                 </p>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -260,8 +426,22 @@ export default function WelcomePage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 mb-1">Pending</p>
+                <p className="text-3xl font-bold text-orange-600">
+                  {ticketStats?.pending || 0}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                <Clock className="w-6 h-6 text-orange-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Rejected</p>
                 <p className="text-3xl font-bold text-red-600">
-                  {dashboardData?.stats?.pendingTickets || 10}
+                  {ticketStats?.rejected || 0}
                 </p>
               </div>
               <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
@@ -278,7 +458,7 @@ export default function WelcomePage() {
               <h2 className="text-2xl font-semibold text-gray-800 mb-4">Tickets by Status</h2>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart
-                  data={graphData.ticketsByStatus}
+                  data={getGraphData().ticketsByStatus}
                   margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />

@@ -10,6 +10,8 @@ const SystemSettings = () => {
   const [error, setError] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
   const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
   const [newUser, setNewUser] = useState({ username: '', email: '', role: 'user', password: '' });
 
   useEffect(() => {
@@ -78,11 +80,42 @@ const SystemSettings = () => {
     }
   };
 
+  const validatePassword = (password) => {
+    const minLength = 8;
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+    
+    if (password.length < minLength) {
+      return 'Password must be at least 8 characters long';
+    }
+    if (!hasUpperCase) {
+      return 'Password must contain at least one uppercase letter';
+    }
+    if (!hasLowerCase) {
+      return 'Password must contain at least one lowercase letter';
+    }
+    if (!hasNumbers) {
+      return 'Password must contain at least one number';
+    }
+    if (!hasSpecialChar) {
+      return 'Password must contain at least one special character';
+    }
+    return null;
+  };
+
   const handleAddUser = async (e) => {
     e.preventDefault();
     
     if (!newUser.username || !newUser.email || !newUser.password) {
       setMessage({ type: 'error', text: 'Please fill in all required fields' });
+      return;
+    }
+
+    const passwordError = validatePassword(newUser.password);
+    if (passwordError) {
+      setMessage({ type: 'error', text: passwordError });
       return;
     }
 
@@ -101,7 +134,11 @@ const SystemSettings = () => {
         setShowAddUserModal(false);
         setMessage({ type: 'success', text: 'User created successfully' });
       } else {
-        setMessage({ type: 'error', text: data.message || 'Failed to create user' });
+        if (data.message && data.message.includes('already exists')) {
+          setMessage({ type: 'error', text: 'User with this username or email already exists' });
+        } else {
+          setMessage({ type: 'error', text: data.message || 'Failed to create user' });
+        }
       }
     } catch (err) {
       setMessage({ type: 'error', text: 'Failed to create user' });
@@ -130,8 +167,51 @@ const SystemSettings = () => {
     }
   };
 
+  const handleEditUser = (user) => {
+    setEditingUser({ ...user, password: '' });
+    setShowEditUserModal(true);
+  };
+
+  const handleUpdateUser = async (e) => {
+    e.preventDefault();
+    
+    try {
+      const updateData = {
+        username: editingUser.username,
+        email: editingUser.email,
+        role: editingUser.role
+      };
+      
+      if (editingUser.password) {
+        updateData.password = editingUser.password;
+      }
+
+      const response = await fetch(`http://localhost:5000/api/users/${editingUser._id}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setUsers(users.map(user => 
+          user._id === editingUser._id ? data.data.user : user
+        ));
+        setShowEditUserModal(false);
+        setEditingUser(null);
+        setMessage({ type: 'success', text: 'User updated successfully' });
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Failed to update user' });
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Failed to update user' });
+    }
+  };
+
   const handleRoleChange = async (userId, newRole) => {
     try {
+      console.log('Changing role for user:', userId, 'to:', newRole);
       const response = await fetch(`http://localhost:5000/api/users/${userId}/role`, {
         method: 'PUT',
         credentials: 'include',
@@ -140,15 +220,22 @@ const SystemSettings = () => {
       });
 
       const data = await response.json();
+      console.log('Role change response:', data);
+      
       if (data.success) {
         setUsers(users.map(user => 
           user._id === userId ? { ...user, role: newRole } : user
         ));
         setMessage({ type: 'success', text: 'User role updated successfully' });
+        // Refresh role stats if on roles tab
+        if (activeTab === 'roles') {
+          fetchRoleStats();
+        }
       } else {
         setMessage({ type: 'error', text: data.message || 'Failed to update user role' });
       }
     } catch (err) {
+      console.error('Role change error:', err);
       setMessage({ type: 'error', text: 'Failed to update user role' });
     }
   };
@@ -252,23 +339,7 @@ const SystemSettings = () => {
           </div>
         </div>
 
-        {/* Message Display */}
-        {message.text && (
-          <div className={`p-4 rounded-lg border-l-4 shadow-sm mb-6 ${
-            message.type === 'success' 
-              ? 'bg-green-50 border-green-400 text-green-700' 
-              : 'bg-red-50 border-red-400 text-red-700'
-          }`}>
-            <div className="flex items-center">
-              {message.type === 'success' ? (
-                <CheckCircle className="w-5 h-5 mr-3" />
-              ) : (
-                <AlertCircle className="w-5 h-5 mr-3" />
-              )}
-              <span className="font-medium">{message.text}</span>
-            </div>
-          </div>
-        )}
+
 
         {/* Content */}
         {activeTab === 'users' && (
@@ -329,14 +400,23 @@ const SystemSettings = () => {
                         <span className="text-sm text-gray-900">{formatDate(user.createdAt)}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <button
-                          onClick={() => handleDeleteUser(user._id)}
-                          disabled={user._id === currentUser?._id}
-                          className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                          title={user._id === currentUser?._id ? "Cannot delete your own account" : "Delete user"}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleEditUser(user)}
+                            className="text-blue-600 hover:text-blue-900"
+                            title="Edit user"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(user._id)}
+                            disabled={user._id === currentUser?._id}
+                            className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={user._id === currentUser?._id ? "Cannot delete your own account" : "Delete user"}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -423,11 +503,102 @@ const SystemSettings = () => {
           </div>
         )}
 
+        {/* Edit User Modal */}
+        {showEditUserModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg max-w-md w-full p-6">
+              <h3 className="text-lg font-semibold mb-4">Edit User</h3>
+              <form onSubmit={handleUpdateUser} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
+                  <input
+                    type="text"
+                    value={editingUser?.username || ''}
+                    onChange={(e) => setEditingUser({...editingUser, username: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                  <input
+                    type="email"
+                    value={editingUser?.email || ''}
+                    onChange={(e) => setEditingUser({...editingUser, email: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Password (leave blank to keep current)</label>
+                  <input
+                    type="password"
+                    value={editingUser?.password || ''}
+                    onChange={(e) => setEditingUser({...editingUser, password: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+                  <select
+                    value={editingUser?.role || 'user'}
+                    onChange={(e) => setEditingUser({...editingUser, role: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="user">User</option>
+                    <option value="support">Support</option>
+                    <option value="it_staff">IT Staff</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="submit"
+                    className="flex-1 text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 transition-all"
+                    style={{ backgroundColor: '#272757' }}
+                  >
+                    Update User
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditUserModal(false);
+                      setEditingUser(null);
+                    }}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* Add User Modal */}
         {showAddUserModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-lg max-w-md w-full p-6">
               <h3 className="text-lg font-semibold mb-4">Add New User</h3>
+              
+              {/* Message Display inside Add User Modal */}
+              {message.text && (
+                <div className={`p-3 rounded-lg border-l-4 shadow-sm mb-4 ${
+                  message.type === 'success' 
+                    ? 'bg-green-50 border-green-400 text-green-700' 
+                    : 'bg-red-50 border-red-400 text-red-700'
+                }`}>
+                  <div className="flex items-center">
+                    {message.type === 'success' ? (
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 mr-2" />
+                    )}
+                    <span className="text-sm font-medium">{message.text}</span>
+                  </div>
+                </div>
+              )}
+              
               <form onSubmit={handleAddUser} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
@@ -456,6 +627,7 @@ const SystemSettings = () => {
                     value={newUser.password}
                     onChange={(e) => setNewUser({...newUser, password: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Min 8 chars, uppercase, lowercase, number, special char"
                     required
                   />
                 </div>
@@ -482,7 +654,10 @@ const SystemSettings = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowAddUserModal(false)}
+                    onClick={() => {
+                      setShowAddUserModal(false);
+                      setMessage({ type: '', text: '' });
+                    }}
                     className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                   >
                     Cancel
