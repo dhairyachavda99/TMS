@@ -23,9 +23,7 @@ export default function WelcomePage() {
 
   useEffect(() => {
     fetchWelcomeData();
-    fetchNotifications();
-    fetchUnreadCount();
-    fetchTicketStats();
+    loadNotifications();
   }, []);
 
   useEffect(() => {
@@ -38,111 +36,57 @@ export default function WelcomePage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showNotifications]);
 
-  const [ticketStats, setTicketStats] = useState(null);
 
-  const fetchTicketStats = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      
-      const response = await fetch('http://localhost:5000/api/viewtickets', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await response.json();
-      if (data.success) {
-        const tickets = data.tickets;
-        
-        // Calculate statistics
-        const total = tickets.length;
-        const open = tickets.filter(t => t.status === 'open').length;
-        const resolved = tickets.filter(t => t.status === 'resolved').length;
-        const pending = tickets.filter(t => t.status === 'pending').length;
-        const inProgress = tickets.filter(t => t.status === 'in-progress').length;
-        const rejected = tickets.filter(t => t.status === 'rejected').length;
-        
-        const stats = {
-          total,
-          open,
-          resolved,
-          pending,
-          inProgress,
-          rejected,
-          chartData: [
-            { name: 'Total', count: total, fill: '#6E00B3' },
-            { name: 'Open', count: open, fill: '#3B82F6' },
-            { name: 'Resolved', count: resolved, fill: '#10B981' },
-            { name: 'Pending', count: pending, fill: '#F59E0B' },
-            { name: 'Rejected', count: rejected, fill: '#EF4444' }
-          ]
-        };
-        
-        setTicketStats(stats);
-      }
-    } catch (error) {
-      console.error('Error fetching ticket stats:', error);
-    }
-  };
+
+
 
   const getGraphData = () => {
-    if (!ticketStats?.chartData) return { ticketsByStatus: [] };
-    return { ticketsByStatus: ticketStats.chartData };
+    if (!dashboardData?.stats) return { ticketsByStatus: [] };
+    const stats = dashboardData.stats;
+    return {
+      ticketsByStatus: [
+        { name: 'Total', count: stats.totalTickets, fill: '#6E00B3' },
+        { name: 'Open', count: stats.openTickets, fill: '#3B82F6' },
+        { name: 'Resolved', count: stats.resolvedTickets, fill: '#10B981' },
+        { name: 'Pending', count: stats.pendingTickets, fill: '#F59E0B' },
+        { name: 'Rejected', count: stats.rejectedTickets, fill: '#EF4444' }
+      ]
+    };
   };
 
-  const fetchNotifications = async () => {
+  const loadNotifications = async () => {
     try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (!token) return;
+      
       const response = await fetch('http://localhost:5000/api/notifications', {
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await response.json();
-      console.log('Notifications response:', data);
-      if (data.success) {
-        setNotifications(data.data.notifications || []);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data.notifications) {
+          setNotifications(data.data.notifications);
+          console.log('Loaded notifications:', data.data.notifications.length);
+        }
       }
     } catch (error) {
-      console.error('Failed to fetch notifications:', error);
-    }
-  };
-
-  const fetchUnreadCount = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/api/notifications/unread-count', {
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      const data = await response.json();
-      console.log('Unread count response:', data);
-      if (data.success) {
-        setUnreadCount(data.data.count || 0);
-      }
-    } catch (error) {
-      console.error('Failed to fetch unread count:', error);
+      console.error('Error loading notifications:', error);
     }
   };
 
   const markAsRead = async (notificationId) => {
+    if (!notificationId) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/notifications/${notificationId}/read`, {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      await fetch(`http://localhost:5000/api/notifications/${notificationId}/read`, {
         method: 'PUT',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await response.json();
-      console.log('Mark read response:', data);
-      if (data.success) {
-        fetchNotifications();
-        fetchUnreadCount();
-      }
+      // Update local state immediately
+      setNotifications(prev => 
+        prev.map(n => n._id === notificationId ? {...n, isRead: true} : n)
+      );
     } catch (error) {
       console.error('Failed to mark as read:', error);
     }
@@ -271,13 +215,16 @@ export default function WelcomePage() {
             <div className="flex items-center gap-4">
               <div className="relative notification-dropdown">
                 <button 
-                  onClick={() => setShowNotifications(!showNotifications)}
+                  onClick={() => {
+                    setShowNotifications(!showNotifications);
+                    loadNotifications();
+                  }}
                   className="p-2 text-gray-400 hover:text-gray-600 transition-colors relative"
                 >
                   <Bell className="w-5 h-5" />
-                  {unreadCount > 0 && (
+                  {notifications.filter(n => !n.isRead).length > 0 && (
                     <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                      {unreadCount}
+                      {notifications.filter(n => !n.isRead).length}
                     </span>
                   )}
                 </button>
@@ -285,39 +232,41 @@ export default function WelcomePage() {
                 {showNotifications && (
                   <div className="absolute right-0 top-12 w-80 bg-white rounded-lg shadow-lg border z-50 max-h-96 overflow-y-auto">
                     <div className="p-4 border-b">
-                      <h3 className="font-semibold text-gray-900">Notifications</h3>
+                      <h3 className="font-semibold text-gray-900">Notifications ({notifications.length})</h3>
                     </div>
                     {notifications.length === 0 ? (
                       <div className="p-4 text-center text-gray-500">
-                        No notifications
+                        No notifications found
                       </div>
                     ) : (
-                      notifications.map((notification) => (
-                        <div 
-                          key={notification._id} 
-                          className={`p-4 border-b hover:bg-gray-50 cursor-pointer ${
-                            !notification.isRead ? 'bg-blue-50' : ''
-                          }`}
-                          onClick={() => markAsRead(notification._id)}
-                        >
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-sm text-gray-900">
-                                {notification.title}
-                              </h4>
-                              <p className="text-xs text-gray-600 mt-1">
-                                {notification.message}
-                              </p>
-                              <p className="text-xs text-gray-400 mt-2">
-                                {new Date(notification.createdAt).toLocaleString()}
-                              </p>
+                      <div>
+                        {notifications.map((notification, index) => (
+                          <div 
+                            key={notification._id || index}
+                            className={`p-4 border-b hover:bg-gray-50 cursor-pointer ${
+                              !notification.isRead ? 'bg-blue-50' : ''
+                            }`}
+                            onClick={() => markAsRead(notification._id)}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <h4 className="font-medium text-sm text-gray-900">
+                                  {notification.title || 'Notification'}
+                                </h4>
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {notification.message || 'No message'}
+                                </p>
+                                <p className="text-xs text-gray-400 mt-2">
+                                  {notification.createdAt ? new Date(notification.createdAt).toLocaleString() : 'Unknown time'}
+                                </p>
+                              </div>
+                              {!notification.isRead && (
+                                <div className="w-2 h-2 bg-blue-500 rounded-full ml-2 mt-1"></div>
+                              )}
                             </div>
-                            {!notification.isRead && (
-                              <div className="w-2 h-2 bg-blue-500 rounded-full ml-2 mt-1"></div>
-                            )}
                           </div>
-                        </div>
-                      ))
+                        ))}
+                      </div>
                     )}
                   </div>
                 )}
@@ -352,7 +301,7 @@ export default function WelcomePage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-3xl font-bold mb-2">
-                  Welcome back, {user?.name}!
+                  Welcome Back, {user?.name}!
                 </h2>
                 <p className="text-purple-100 mb-4">
                   {user?.role === 'it_staff' 
@@ -385,7 +334,7 @@ export default function WelcomePage() {
               <div>
                 <p className="text-sm text-gray-600 mb-1">Total Tickets</p>
                 <p className="text-3xl font-bold text-purple-600">
-                  {ticketStats?.total || 0}
+                  {dashboardData?.stats?.totalTickets || 0}
                 </p>
               </div>
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -399,7 +348,7 @@ export default function WelcomePage() {
               <div>
                 <p className="text-sm text-gray-600 mb-1">Open Tickets</p>
                 <p className="text-3xl font-bold text-blue-600">
-                  {ticketStats?.open || 0}
+                  {dashboardData?.stats?.openTickets || 0}
                 </p>
               </div>
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -413,7 +362,7 @@ export default function WelcomePage() {
               <div>
                 <p className="text-sm text-gray-600 mb-1">Resolved</p>
                 <p className="text-3xl font-bold text-green-600">
-                  {ticketStats?.resolved || 0}
+                  {dashboardData?.stats?.resolvedTickets || 0}
                 </p>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -427,7 +376,7 @@ export default function WelcomePage() {
               <div>
                 <p className="text-sm text-gray-600 mb-1">Pending</p>
                 <p className="text-3xl font-bold text-orange-600">
-                  {ticketStats?.pending || 0}
+                  {dashboardData?.stats?.pendingTickets || 0}
                 </p>
               </div>
               <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
@@ -441,7 +390,7 @@ export default function WelcomePage() {
               <div>
                 <p className="text-sm text-gray-600 mb-1">Rejected</p>
                 <p className="text-3xl font-bold text-red-600">
-                  {ticketStats?.rejected || 0}
+                  {dashboardData?.stats?.rejectedTickets || 0}
                 </p>
               </div>
               <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
@@ -504,6 +453,17 @@ export default function WelcomePage() {
                     <div className="flex items-center gap-3">
                       <Settings className="w-5 h-5 text-orange-600" />
                       <span className="text-sm font-medium">System Settings</span>
+                    </div>
+                  </button>
+                )}
+                
+                {(user?.role === 'admin' || user?.role === 'it_staff') && (
+                  <button onClick={() => window.location.href = 'welcome/ITStaffAnalytics'} className="w-full p-3 text-left bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors">
+                    <div className="flex items-center gap-3">
+                      <Activity className="w-5 h-5 text-indigo-600" />
+                      <span className="text-sm font-medium">
+                        {user?.role === 'admin' ? 'IT Staff Analytics' : 'My Performance'}
+                      </span>
                     </div>
                   </button>
                 )}

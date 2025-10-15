@@ -128,6 +128,8 @@ const createTicket = async (req, res) => {
       }
     });
 
+
+
     // Populate the ticket for response
     await ticket.populate([
       { path: 'raisedBy', select: 'username email role' },
@@ -497,6 +499,17 @@ const acceptTicket = async (req, res) => {
       updatedBy: userId
     });
 
+    // Notify ticket creator
+    const notification = new Notification({
+      recipient: ticket.raisedBy,
+      sender: userId,
+      type: 'ticket_accepted',
+      title: 'Ticket Accepted',
+      message: `Your ticket ${ticket.ticketNumber} has been accepted and is now being worked on`,
+      ticketId: ticket._id
+    });
+    await notification.save();
+
     res.json({
       success: true,
       message: 'Ticket accepted successfully'
@@ -556,6 +569,17 @@ const rejectTicket = async (req, res) => {
       newStatus: 'rejected',
       updatedBy: userId
     });
+
+    // Notify ticket creator
+    const notification = new Notification({
+      recipient: ticket.raisedBy,
+      sender: userId,
+      type: 'ticket_rejected',
+      title: 'Ticket Rejected',
+      message: `Your ticket ${ticket.ticketNumber} has been rejected. Reason: ${reason || 'No reason provided'}`,
+      ticketId: ticket._id
+    });
+    await notification.save();
 
     res.json({
       success: true,
@@ -619,6 +643,17 @@ const completeTicket = async (req, res) => {
       updatedBy: userId
     });
 
+    // Notify ticket creator
+    const notification = new Notification({
+      recipient: ticket.raisedBy,
+      sender: userId,
+      type: 'ticket_completed',
+      title: 'Ticket Resolved',
+      message: `Your ticket ${ticket.ticketNumber} has been resolved. Resolution: ${resolution || 'Completed'}`,
+      ticketId: ticket._id
+    });
+    await notification.save();
+
     res.json({
       success: true,
       message: 'Ticket completed successfully'
@@ -664,8 +699,9 @@ const forwardTicket = async (req, res) => {
     }
 
     ticket.assignedTo = assignToId;
+    ticket.status = 'open';
     ticket.history.push({
-      status: ticket.status,
+      status: 'open',
       note: note || `Ticket forwarded to ${assignToUser.username}`,
       updatedBy: userId
     });
@@ -676,7 +712,7 @@ const forwardTicket = async (req, res) => {
       ticketId: ticket._id,
       action: 'forwarded',
       description: note || `Ticket forwarded to ${assignToUser.username}`,
-      newStatus: ticket.status,
+      newStatus: 'open',
       updatedBy: userId,
       metadata: { forwardedTo: assignToId }
     });
@@ -725,6 +761,84 @@ const getITStaff = async (req, res) => {
   }
 };
 
+// Get IT staff statistics
+const getITStaffStats = async (req, res) => {
+  try {
+    const userRole = req.user.role;
+    const userId = req.user._id;
+    const { staffId } = req.query;
+
+    if (!['admin', 'it_staff'].includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    // Get IT staff based on selection
+    let itStaff;
+    if (userRole === 'admin' && staffId && staffId !== 'all') {
+      itStaff = await User.find({ _id: staffId, role: 'it_staff' });
+    } else if (userRole === 'admin') {
+      itStaff = await User.find({ role: 'it_staff' });
+    } else {
+      itStaff = await User.find({ _id: userId, role: { $in: ['admin', 'it_staff'] } });
+    }
+    
+    // Generate last 6 months
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date();
+      date.setMonth(date.getMonth() - i);
+      months.push(date.toISOString().slice(0, 7)); // YYYY-MM format
+    }
+    
+    // Create stats for each staff member for each month
+    const stats = [];
+    
+    for (const staff of itStaff) {
+      if (userRole === 'it_staff' && !staff._id.equals(userId)) continue;
+      
+      for (const month of months) {
+        // Get tickets for this staff member in this month
+        const monthStart = new Date(month + '-01');
+        const monthEnd = new Date(monthStart);
+        monthEnd.setMonth(monthEnd.getMonth() + 1);
+        
+        const tickets = await Ticket.find({
+          $or: [
+            { assignedTo: staff._id },
+            { 'history.updatedBy': staff._id }
+          ],
+          createdAt: { $gte: monthStart, $lt: monthEnd }
+        });
+        
+        stats.push({
+          month,
+          staffId: staff._id,
+          staffName: staff.username,
+          accepted: tickets.filter(t => t.status !== 'pending').length,
+          completed: tickets.filter(t => t.status === 'resolved').length,
+          rejected: tickets.filter(t => t.status === 'rejected').length,
+          open: tickets.filter(t => t.status === 'open').length,
+          total: tickets.length
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      data: { stats }
+    });
+  } catch (error) {
+    console.error('Get IT staff stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
 module.exports = {
   createTicket,
   getUserTickets,
@@ -736,5 +850,6 @@ module.exports = {
   rejectTicket,
   completeTicket,
   forwardTicket,
-  getITStaff
+  getITStaff,
+  getITStaffStats
 };

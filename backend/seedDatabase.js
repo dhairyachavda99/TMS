@@ -68,55 +68,55 @@ const sampleUsers = [
   {
     username: 'admin',
     email: 'admin@ticketmanagement.com',
-    password: 'Admin123!',
+    password: 'Admin123',
     role: 'admin'
   },
    {
     username: 'Hetal Savla',
     email: 'hetalsavla99@gmail.com',
-    password: 'Hetal123!',
+    password: 'Hetal1234',
     role: 'admin'
   },
   {
     username: 'Asmita Zala',
     email: 'asmita2@gmail.com',
-    password: 'Asmita123!',
+    password: 'asmita2',
     role: 'user'
   },
   {
     username: 'Shaunak Purohit',
     email: 'shaunak11@gmail.com',
-    password: 'Shaunak123!',
+    password: 'shaunak11',
     role: 'user'
   },
   {
     username: 'Khushal Rajani',
     email: 'khuushal44@gmail.com',
-    password: 'Khushal123!',
+    password: 'asmita2',
     role: 'user'
   },
   {
     username: 'Sawan Sanghvi',
     email: 'savan77@gmail.com',
-    password: 'Sawan123!',
+    password: 'sawan77',
     role: 'user'
   },
   {
     username: 'Imran Modi',
     email: 'imran66@gmail.com',
-    password: 'Imran123!',
+    password: 'imran66',
     role: 'user'
   },
   {
     username: 'Yash Kotecha',
     email: 'yash1@gmail.com',
-    password: 'Yash123!',
+    password: 'yash1',
     role: 'user'
   },
   {
     username: 'Devki Trivedi',
     email: 'devkit@gmail.com',
-    password: 'Devki123!',
+    password: 'devki123',
     role: 'user'
   },
   {
@@ -181,6 +181,12 @@ const sampleUsers = [
     password: 'TechSpec123!',
     role: 'it_staff'
   }
+  // {
+  //   username: 'Abhishek Parmar',
+  //   email: 'abhishek55@gmail.com',
+  //   password: 'abhishek55',
+  //   role: 'it_staff'
+  // }
 ];
 
 async function seedDatabase() {

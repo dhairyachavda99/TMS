@@ -400,21 +400,8 @@ const ManageTickets = () => {
 
                   {ticket.status === 'open' && (
                     <>
-                      {/* Complete button only for assigned IT staff */}
+                      {/* Only show buttons if ticket is assigned to current user */}
                       {ticket.assignedTo && ticket.assignedTo._id === currentUser?._id && (
-                        <button
-                          onClick={() => {
-                            setSelectedTicket(ticket);
-                            setShowCompleteModal(true);
-                          }}
-                          disabled={actionLoading}
-                          className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 disabled:opacity-50"
-                        >
-                          Complete
-                        </button>
-                      )}
-                      {/* Forward button only if no one is assigned or current user accepted it */}
-                      {!ticket.assignedTo && (
                         <>
                           <button
                             onClick={() => {
@@ -426,6 +413,7 @@ const ManageTickets = () => {
                           >
                             Complete
                           </button>
+                          
                           <button
                             onClick={() => {
                               setSelectedTicket(ticket);
@@ -493,7 +481,7 @@ const ManageTickets = () => {
                 onChange={(e) => setForwardData({...forwardData, assignToId: e.target.value})}
               >
                 <option value="">Select IT Staff</option>
-                {itStaff.map((staff) => (
+                {itStaff.filter(staff => staff._id !== currentUser?._id).map((staff) => (
                   <option key={staff._id} value={staff._id}>
                     {staff.username} ({staff.role})
                   </option>

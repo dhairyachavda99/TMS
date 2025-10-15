@@ -68,6 +68,22 @@ router.post('/generate', authenticateToken, validateTicketCreation, async (req, 
     });
 
     await logEntry.save();
+
+    // Notify all IT staff about new ticket
+    const Notification = require('../models/Notification');
+    const itStaff = await User.find({ role: { $in: ['admin', 'it_staff'] } });
+    for (const staff of itStaff) {
+      const notification = new Notification({
+        recipient: staff._id,
+        sender: userId,
+        type: 'ticket_assigned',
+        title: 'New Ticket Created',
+        message: `New ${ticketType} ticket created: ${title}`,
+        ticketId: ticket._id
+      });
+      await notification.save();
+    }
+
     // Populate the ticket for response
     await ticket.populate([
       { path: 'raisedBy', select: 'username email role' },
@@ -210,7 +226,7 @@ router.get('/:ticketId/logs', authenticateToken, async (req, res) => {
 });
 
 // IT Staff Management Routes
-const { acceptTicket, rejectTicket, completeTicket, forwardTicket, getITStaff, getAllTickets } = require('../controllers/ticketController');
+const { acceptTicket, rejectTicket, completeTicket, forwardTicket, getITStaff, getAllTickets, getITStaffStats } = require('../controllers/ticketController');
 
 // Get all tickets (for IT staff)
 router.get('/', authenticateToken, getAllTickets);
@@ -229,5 +245,8 @@ router.put('/:id/forward', authenticateToken, forwardTicket);
 
 // Get IT staff list
 router.get('/it-staff', authenticateToken, getITStaff);
+
+// Get IT staff statistics
+router.get('/stats/it-staff', authenticateToken, getITStaffStats);
 
 module.exports = router;

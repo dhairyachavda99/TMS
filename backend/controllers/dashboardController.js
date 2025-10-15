@@ -9,8 +9,8 @@ const getWelcomeData = async (req, res) => {
     // Get role-specific ticket statistics
     let ticketQuery = {};
     
-    if (user.role === 'user') {
-      // Users see only their own tickets
+    if (user.role === 'user' || user.role === 'support') {
+      // Users and support see only their own tickets
       ticketQuery = {
         $or: [
           { raisedBy: user._id },

@@ -8,6 +8,7 @@ import ViewTickets from './pages/ViewTickets';
 import UpdateProfile from './pages/UpdateProfile';
 import SystemSettings from './pages/SystemSettings';
 import ManageTickets from './pages/ManageTickets';
+import ITStaffAnalytics from './pages/ITStaffAnalytics';
 
 const App = () => {
   return (
@@ -21,6 +22,7 @@ const App = () => {
         <Route path="/welcome/UpdateProfile" element={<UpdateProfile />}/>
         <Route path="/welcome/SystemSettings" element={<SystemSettings />}/>
         <Route path="/welcome/ManageTickets" element={<ManageTickets />}/>
+        <Route path="/welcome/ITStaffAnalytics" element={<ITStaffAnalytics />}/>
       </Routes>
     </Router>
   );
