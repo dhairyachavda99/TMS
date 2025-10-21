@@ -761,12 +761,12 @@ const getITStaff = async (req, res) => {
   }
 };
 
-// Get IT staff statistics
+// Get IT staff statistics with pagination
 const getITStaffStats = async (req, res) => {
   try {
     const userRole = req.user.role;
     const userId = req.user._id;
-    const { staffId } = req.query;
+    const { staffId, page = 1, limit = 10, startDate, endDate, viewType = 'month' } = req.query;
 
     if (!['admin', 'it_staff'].includes(userRole)) {
       return res.status(403).json({
@@ -774,6 +774,10 @@ const getITStaffStats = async (req, res) => {
         message: 'Access denied'
       });
     }
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
 
     // Get IT staff based on selection
     let itStaff;
@@ -785,50 +789,120 @@ const getITStaffStats = async (req, res) => {
       itStaff = await User.find({ _id: userId, role: { $in: ['admin', 'it_staff'] } });
     }
     
-    // Generate last 6 months
-    const months = [];
-    for (let i = 5; i >= 0; i--) {
-      const date = new Date();
-      date.setMonth(date.getMonth() - i);
-      months.push(date.toISOString().slice(0, 7)); // YYYY-MM format
+    // Generate date ranges based on viewType and date filters
+    let dateRanges = [];
+    const now = new Date();
+    
+    if (startDate && endDate) {
+      // Custom date range
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      if (viewType === 'day') {
+        // Generate daily ranges
+        const current = new Date(start);
+        while (current <= end) {
+          dateRanges.push({
+            label: current.toISOString().slice(0, 10),
+            start: new Date(current),
+            end: new Date(current.getTime() + 24 * 60 * 60 * 1000)
+          });
+          current.setDate(current.getDate() + 1);
+        }
+      } else {
+        // Generate monthly ranges
+        const current = new Date(start.getFullYear(), start.getMonth(), 1);
+        const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+        
+        while (current <= endMonth) {
+          const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0);
+          dateRanges.push({
+            label: current.toISOString().slice(0, 7),
+            start: new Date(current),
+            end: new Date(monthEnd.getTime() + 24 * 60 * 60 * 1000)
+          });
+          current.setMonth(current.getMonth() + 1);
+        }
+      }
+    } else {
+      // Default: last 6 months or 30 days
+      const periods = viewType === 'day' ? 30 : 6;
+      
+      for (let i = periods - 1; i >= 0; i--) {
+        if (viewType === 'day') {
+          const date = new Date(now);
+          date.setDate(date.getDate() - i);
+          dateRanges.push({
+            label: date.toISOString().slice(0, 10),
+            start: new Date(date),
+            end: new Date(date.getTime() + 24 * 60 * 60 * 1000)
+          });
+        } else {
+          const date = new Date(now);
+          date.setMonth(date.getMonth() - i);
+          const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+          const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+          dateRanges.push({
+            label: monthStart.toISOString().slice(0, 7),
+            start: monthStart,
+            end: new Date(monthEnd.getTime() + 24 * 60 * 60 * 1000)
+          });
+        }
+      }
     }
     
-    // Create stats for each staff member for each month
-    const stats = [];
+    // Create stats for each staff member for each date range
+    const allStats = [];
     
     for (const staff of itStaff) {
       if (userRole === 'it_staff' && !staff._id.equals(userId)) continue;
       
-      for (const month of months) {
-        // Get tickets for this staff member in this month
-        const monthStart = new Date(month + '-01');
-        const monthEnd = new Date(monthStart);
-        monthEnd.setMonth(monthEnd.getMonth() + 1);
-        
+      for (const range of dateRanges) {
         const tickets = await Ticket.find({
           $or: [
             { assignedTo: staff._id },
             { 'history.updatedBy': staff._id }
           ],
-          createdAt: { $gte: monthStart, $lt: monthEnd }
+          createdAt: { $gte: range.start, $lt: range.end }
         });
         
-        stats.push({
-          month,
+        allStats.push({
+          period: range.label,
           staffId: staff._id,
           staffName: staff.username,
           accepted: tickets.filter(t => t.status !== 'pending').length,
           completed: tickets.filter(t => t.status === 'resolved').length,
           rejected: tickets.filter(t => t.status === 'rejected').length,
           open: tickets.filter(t => t.status === 'open').length,
-          total: tickets.length
+          total: tickets.length,
+          viewType
         });
       }
     }
 
+    // Apply pagination
+    const totalStats = allStats.length;
+    const paginatedStats = allStats.slice(skip, skip + limitNum);
+
     res.json({
       success: true,
-      data: { stats }
+      data: {
+        stats: paginatedStats,
+        pagination: {
+          current: pageNum,
+          pages: Math.ceil(totalStats / limitNum),
+          total: totalStats,
+          hasNext: pageNum < Math.ceil(totalStats / limitNum),
+          hasPrev: pageNum > 1,
+          limit: limitNum
+        },
+        filters: {
+          viewType,
+          startDate,
+          endDate,
+          staffId
+        }
+      }
     });
   } catch (error) {
     console.error('Get IT staff stats error:', error);

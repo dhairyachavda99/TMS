@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Users, TrendingUp, CheckCircle, XCircle, Clock, ArrowLeft } from 'lucide-react';
+import { Users, TrendingUp, CheckCircle, XCircle, Clock, ArrowLeft, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 
 const ITStaffAnalytics = () => {
   const [stats, setStats] = useState([]);
@@ -9,6 +9,14 @@ const ITStaffAnalytics = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [itStaffList, setItStaffList] = useState([]);
   const [selectedStaff, setSelectedStaff] = useState('all');
+  const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
+  const [filters, setFilters] = useState({
+    viewType: 'month',
+    startDate: '',
+    endDate: '',
+    page: 1,
+    limit: 10
+  });
 
   useEffect(() => {
     fetchCurrentUser();
@@ -20,7 +28,7 @@ const ITStaffAnalytics = () => {
     if (selectedStaff) {
       fetchITStaffStats();
     }
-  }, [selectedStaff]);
+  }, [selectedStaff, filters]);
 
   const fetchITStaffList = async () => {
     try {
@@ -55,11 +63,16 @@ const ITStaffAnalytics = () => {
   const fetchITStaffStats = async () => {
     try {
       setLoading(true);
-      const url = selectedStaff && selectedStaff !== 'all' 
-        ? `http://localhost:5000/api/tickets/stats/it-staff?staffId=${selectedStaff}`
-        : 'http://localhost:5000/api/tickets/stats/it-staff';
+      const params = new URLSearchParams({
+        page: filters.page,
+        limit: filters.limit,
+        viewType: filters.viewType,
+        ...(selectedStaff !== 'all' && { staffId: selectedStaff }),
+        ...(filters.startDate && { startDate: filters.startDate }),
+        ...(filters.endDate && { endDate: filters.endDate })
+      });
       
-      const response = await fetch(url, {
+      const response = await fetch(`http://localhost:5000/api/tickets/stats/it-staff?${params}`, {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -67,6 +80,7 @@ const ITStaffAnalytics = () => {
       const data = await response.json();
       if (data.success) {
         setStats(data.data.stats);
+        setPagination(data.data.pagination);
       } else {
         setError(data.message || 'Failed to fetch IT staff statistics');
       }
@@ -79,6 +93,24 @@ const ITStaffAnalytics = () => {
 
   const handleGoBack = () => {
     window.history.back();
+  };
+
+  const handlePageChange = (newPage) => {
+    setFilters(prev => ({ ...prev, page: newPage }));
+  };
+
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value, page: 1 }));
+  };
+
+  const resetFilters = () => {
+    setFilters({
+      viewType: 'month',
+      startDate: '',
+      endDate: '',
+      page: 1,
+      limit: 10
+    });
   };
 
   const COLORS = ['#10B981', '#3B82F6', '#EF4444', '#F59E0B'];
@@ -112,9 +144,9 @@ const ITStaffAnalytics = () => {
     );
   }
 
-  // Group data by month for charts
-  const monthlyData = stats.reduce((acc, stat) => {
-    const existing = acc.find(item => item.month === stat.month);
+  // Group data by period for charts
+  const periodData = stats.reduce((acc, stat) => {
+    const existing = acc.find(item => item.period === stat.period);
     if (existing) {
       existing.accepted += stat.accepted;
       existing.completed += stat.completed;
@@ -122,7 +154,7 @@ const ITStaffAnalytics = () => {
       existing.open += stat.open;
     } else {
       acc.push({
-        month: stat.month,
+        period: stat.period,
         accepted: stat.accepted,
         completed: stat.completed,
         rejected: stat.rejected,
@@ -180,6 +212,65 @@ const ITStaffAnalytics = () => {
               >
                 <ArrowLeft className="w-4 h-4" />
                 Back to Dashboard
+              </button>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">View:</span>
+                <select
+                  value={filters.viewType}
+                  onChange={(e) => handleFilterChange('viewType', e.target.value)}
+                  className="px-2 py-1 border border-gray-300 rounded text-sm"
+                >
+                  <option value="month">Monthly</option>
+                  <option value="day">Daily</option>
+                </select>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">From:</span>
+                <input
+                  type="date"
+                  value={filters.startDate}
+                  onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                  className="px-2 py-1 border border-gray-300 rounded text-sm"
+                />
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">To:</span>
+                <input
+                  type="date"
+                  value={filters.endDate}
+                  onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                  className="px-2 py-1 border border-gray-300 rounded text-sm"
+                />
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">Per page:</span>
+                <select
+                  value={filters.limit}
+                  onChange={(e) => handleFilterChange('limit', parseInt(e.target.value))}
+                  className="px-2 py-1 border border-gray-300 rounded text-sm"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+              
+              <button
+                onClick={resetFilters}
+                className="px-3 py-1 bg-gray-200 text-gray-700 rounded text-sm hover:bg-gray-300"
+              >
+                Reset
               </button>
             </div>
           </div>
@@ -248,11 +339,13 @@ const ITStaffAnalytics = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               {/* Bar Chart */}
               <div className="bg-white rounded-lg shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Performance Trend</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  {filters.viewType === 'day' ? 'Daily' : 'Monthly'} Performance Trend
+                </h3>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={monthlyData}>
+                  <BarChart data={periodData}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
+                    <XAxis dataKey="period" />
                     <YAxis />
                     <Tooltip />
                     <Legend />
@@ -290,13 +383,21 @@ const ITStaffAnalytics = () => {
 
             {/* Detailed Table */}
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Detailed Statistics</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {filters.viewType === 'day' ? 'Daily' : 'Monthly'} Detailed Statistics
+                </h3>
+                <div className="text-sm text-gray-500">
+                  Showing {((pagination.current - 1) * filters.limit) + 1} to {Math.min(pagination.current * filters.limit, pagination.total)} of {pagination.total} entries
+                </div>
+              </div>
+              
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Month
+                        {filters.viewType === 'day' ? 'Date' : 'Month'}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         IT Staff
@@ -321,7 +422,7 @@ const ITStaffAnalytics = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {stats.map((stat, index) => (
                       <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{stat.month}</td>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{stat.period}</td>
                         <td className="px-6 py-4 text-sm text-gray-900">{stat.staffName}</td>
                         <td className="px-6 py-4 text-sm text-gray-900">{stat.accepted}</td>
                         <td className="px-6 py-4 text-sm text-green-600 font-medium">{stat.completed}</td>
@@ -333,6 +434,50 @@ const ITStaffAnalytics = () => {
                   </tbody>
                 </table>
               </div>
+              
+              {/* Pagination */}
+              {pagination.pages > 1 && (
+                <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
+                  <div className="text-sm text-gray-500">
+                    Page {pagination.current} of {pagination.pages}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handlePageChange(pagination.current - 1)}
+                      disabled={!pagination.hasPrev}
+                      className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    
+                    {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                      const page = Math.max(1, pagination.current - 2) + i;
+                      if (page > pagination.pages) return null;
+                      return (
+                        <button
+                          key={page}
+                          onClick={() => handlePageChange(page)}
+                          className={`px-3 py-1 border rounded text-sm ${
+                            page === pagination.current
+                              ? 'bg-blue-500 text-white border-blue-500'
+                              : 'border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+                    
+                    <button
+                      onClick={() => handlePageChange(pagination.current + 1)}
+                      disabled={!pagination.hasNext}
+                      className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}

@@ -1,7 +1,5 @@
 const User = require('../models/User');
 const { generateToken } = require('../middleware/auth');
-const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 
 // Password validation function
 const validatePassword = (password) => {
@@ -244,94 +242,11 @@ const updateProfile = async (req, res) => {
   }
 };
 
-// Forgot password
-const forgotPassword = async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide email address'
-      });
-    }
-
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User with this email does not exist'
-      });
-    }
-
-    // Generate new strong password
-    const newPassword = crypto.randomBytes(4).toString('hex').toUpperCase() + '123!';
-    
-    // Update user password
-    user.password = newPassword;
-    await user.save();
-
-    // Send email with new password
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      },
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
-
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: 'Password Reset - Ticket Management System',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #272757;">Password Reset</h2>
-          <p>Hello ${user.username},</p>
-          <p>Your password has been reset. Here are your new login credentials:</p>
-          <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-            <p><strong>Username:</strong> ${user.username}</p>
-            <p><strong>New Password:</strong> ${newPassword}</p>
-          </div>
-          <p>Please log in with these credentials and change your password immediately.</p>
-          <p>If you did not request this password reset, please contact your administrator.</p>
-          <br>
-          <p>Best regards,<br>Ticket Management System</p>
-        </div>
-      `
-    };
-
-    await transporter.sendMail(mailOptions);
-    
-    res.json({
-      success: true,
-      message: 'New password has been sent to your email address'
-    });
-  } catch (error) {
-    console.error('Forgot password error:', error);
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      command: error.command
-    });
-    res.status(500).json({
-      success: false,
-      message: `Failed to send password reset email: ${error.message}`
-    });
-  }
-};
-
 
 module.exports = {
   register,
   login,
   logout,
   getMe,
-  updateProfile,
-  forgotPassword
+  updateProfile
 };
