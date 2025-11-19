@@ -32,7 +32,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['admin', 'user', 'support', 'it_staff'], // Added it_staff role
+    enum: ['admin', 'user', 'support', 'it_staff'],
     default: 'user'
   },
   isActive: {
@@ -180,13 +180,31 @@ const sampleUsers = [
     email: 'techspecialist@ticketmanagement.com',
     password: 'TechSpec123!',
     role: 'it_staff'
-  }
-  // {
-  //   username: 'Abhishek Parmar',
-  //   email: 'abhishek55@gmail.com',
-  //   password: 'abhishek55',
-  //   role: 'it_staff'
-  // }
+  },
+  {
+    username: 'Abhishek Parmar',
+    email: 'abhishek55@gmail.com',
+    password: 'abhishek55',
+    role: 'it_staff'
+  },
+  {
+    username: 'Trushal Rajani',
+    email: 'trushal66@gmail.com',
+    password: 'trushal66',
+    role: 'it_staff'
+  },
+  {
+    username: 'Rahul Chauhan',
+    email: 'rahul00@gmail.com',
+    password: 'rahul00',
+    role: 'it_staff'
+  },
+  {
+    username: 'Niral Shah',
+    email: 'niral123@gmail.com',
+    password: 'niral123',
+    role: 'it_staff'
+  },
 ];
 
 async function seedDatabase() {
